@@ -50,6 +50,8 @@ def worker():
 	set_proc_title('seamless worker')
 	signal.signal(signal.SIGTERM, worker_term)
 	set_pdeathsig(signal.SIGTERM)
+	if os.getppid() == 1: # re-parented to init
+		sys.exit('master died before we set pdeathsig; exiting')
 
 	sel = selectors.DefaultSelector()
 	sel.register(sock, selectors.EVENT_READ)
