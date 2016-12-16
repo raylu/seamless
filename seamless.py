@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 
 import os
+import selectors
 import signal
 import socket
 import sys
 
 sock = None
+keep_going = True
 
 def main():
-	global sock
+	global sock, keep_going
 	if len(sys.argv) == 2:
 		fd = int(sys.argv[1])
 		print('inheriting', fd)
@@ -20,16 +22,27 @@ def main():
 		sock.listen(1)
 
 	signal.signal(signal.SIGHUP, hup)
+	signal.signal(signal.SIGTERM, term)
 	print('pid', os.getpid(), 'listening on :8000')
 
-	while True:
-		conn, addr = sock.accept()
-		with conn:
-			handle_client(conn)
+	sel = selectors.DefaultSelector()
+	sel.register(sock, selectors.EVENT_READ)
+	while keep_going:
+		events = sel.select(1)
+		if events:
+			conn, addr = sock.accept()
+			with conn:
+				handle_client(conn)
+	print('cleaning up')
+	sock.close()
 
 def hup(signum, frame):
 	sock.set_inheritable(True)
 	os.execl(sys.argv[0], sys.argv[0], str(sock.fileno()))
+
+def term(signum, frame):
+	global keep_going
+	keep_going = False
 
 def handle_client(conn):
 	data = conn.recv(1024)
