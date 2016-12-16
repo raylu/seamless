@@ -1,16 +1,35 @@
 #!/usr/bin/env python3
 
+import os
+import signal
 import socket
+import sys
+
+sock = None
 
 def main():
-	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-	sock.bind(('', 8000))
-	sock.listen(1)
+	global sock
+	if len(sys.argv) == 2:
+		fd = int(sys.argv[1])
+		print('inheriting', fd)
+		sock = socket.socket(fileno=fd) # sock is now non-inheritable
+	else:
+		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+		sock.bind(('', 8000))
+		sock.listen(1)
+
+	signal.signal(signal.SIGHUP, hup)
+	print('pid', os.getpid(), 'listening on :8000')
+
 	while True:
 		conn, addr = sock.accept()
 		with conn:
 			handle_client(conn)
+
+def hup(signum, frame):
+	sock.set_inheritable(True)
+	os.execl(sys.argv[0], sys.argv[0], str(sock.fileno()))
 
 def handle_client(conn):
 	data = conn.recv(1024)
