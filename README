@@ -1,0 +1,10 @@
+httpd exercise: https://www.raylu.net/httpd.txt
+shell exercise: https://gist.github.com/raylu/5c6d570ae186f963ad2d
+
+if you've done both of the above and want to write a seamlessly reloading httpd,
+you've come to the right place!
+
+use socket.socket's fileno arg
+https://docs.python.org/3/library/socket.html#socket.socket
+
+good luck!
