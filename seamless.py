@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 
 import ctypes
+import ctypes.util
+import errno
 import os
 import selectors
 import signal
 import socket
 import sys
 
-libc = ctypes.cdll.LoadLibrary('libc.so.6')
+libc = ctypes.CDLL(ctypes.util.find_library('c'))
 sock = None
 keep_going = True
 worker_pid = None
@@ -36,11 +38,18 @@ def master():
 	signal.signal(signal.SIGHUP, hup)
 	signal.signal(signal.SIGTERM, master_term)
 	while True:
-		os.wait()
+		try:
+			os.wait()
+		except ChildProcessError as e:
+			if e.errno == errno.ECHILD:
+				break
+			else:
+				raise
 
 def worker():
 	set_proc_title('seamless worker')
 	signal.signal(signal.SIGTERM, worker_term)
+	set_pdeathsig(signal.SIGTERM)
 
 	sel = selectors.DefaultSelector()
 	sel.register(sock, selectors.EVENT_READ)
@@ -87,8 +96,15 @@ def set_proc_title(prname):
 	prname = prname.encode('ascii')
 	prbuf = ctypes.create_string_buffer(len(prname) + 1)
 	prbuf.value = prname
-	libc.prctl(PR_SET_NAME, ctypes.byref(prbuf), 0, 0, 0)
+	r = libc.prctl(PR_SET_NAME, ctypes.byref(prbuf), 0, 0, 0)
+	if r != 0:
+		raise Exception('prctl for PR_SET_NAME returned %r' % r)
 
+def set_pdeathsig(sig):
+	PR_SET_PDEATHSIG = 1
+	r = libc.prctl(PR_SET_PDEATHSIG, sig.value, 0, 0, 0)
+	if r != 0:
+		raise Exception('prctl for PR_SET_PDEATHSIG returned %r' % r)
 
 if __name__ == '__main__':
 	main()
