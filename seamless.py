@@ -16,27 +16,33 @@ worker_pid = None
 
 def main():
 	global sock, worker_pid
-	if len(sys.argv) == 2:
+	old_worker_pid = None
+	if len(sys.argv) == 3:
 		fd = int(sys.argv[1])
-		print('inheriting', fd)
+		old_worker_pid = int(sys.argv[2])
+		print('inheriting %d; will kill old worker pid %d' % (fd, old_worker_pid))
 		sock = socket.socket(fileno=fd) # sock is now non-inheritable
 	else:
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 		sock.bind(('', 8000))
 		sock.listen(4)
-	print('pid', os.getpid(), 'listening on :8000')
+	print('pid', os.getpid(), 'is master listening on :8000')
 
 	worker_pid = os.fork()
 	if worker_pid:
-		master()
+		master(old_worker_pid)
 	else:
 		worker()
 
-def master():
+def master(old_worker_pid):
 	set_proc_title('seamless master')
 	signal.signal(signal.SIGHUP, hup)
 	signal.signal(signal.SIGTERM, master_term)
+
+	if old_worker_pid:
+		os.kill(old_worker_pid, signal.SIGTERM)
+
 	while True:
 		try:
 			os.wait()
@@ -53,21 +59,21 @@ def worker():
 	if os.getppid() == 1: # re-parented to init
 		sys.exit('master died before we set pdeathsig; exiting')
 
+	print('pid', os.getpid(), 'is worker')
 	sel = selectors.DefaultSelector()
 	sel.register(sock, selectors.EVENT_READ)
 	while keep_going:
 		events = sel.select(1)
-		if events:
+		for _ in events:
 			conn, addr = sock.accept()
 			with conn:
 				handle_client(conn)
-	print('cleaning up')
+	print('pid', os.getpid(), 'cleaning up')
 	sock.close()
 
 def hup(signum, frame):
-	os.kill(worker_pid, signal.SIGTERM)
 	sock.set_inheritable(True)
-	os.execl(sys.argv[0], sys.argv[0], str(sock.fileno()))
+	os.execl(sys.argv[0], sys.argv[0], str(sock.fileno()), str(worker_pid))
 
 def master_term(signum, frame):
 	os.kill(worker_pid, signal.SIGTERM)
