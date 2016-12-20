@@ -4,7 +4,12 @@ shell exercise: https://gist.github.com/raylu/5c6d570ae186f963ad2d
 if you've done both of the above and want to write a seamlessly reloading httpd,
 you've come to the right place!
 
-use socket.socket's fileno arg
+provided is seamless.py, a simple, non-concurrent webserver
+and tester.py, a multi-threaded http client that runs seamless.py and sends it SIGHUP
+
+edit seamless.py to handle SIGHUP and reload its own code via os.execl
+use socket.socket's fileno arg to make it seamless
 https://docs.python.org/3/library/socket.html#socket.socket
+if the tester runs without errors, you've either succeeded or cheated
 
 good luck!
